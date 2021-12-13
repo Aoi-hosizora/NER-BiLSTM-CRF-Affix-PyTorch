@@ -273,6 +273,10 @@ def align_char_lists(chars: List[List[int]]):
     return chars_mask, chars_length, d
 
 
+def now_str():
+    return time.strftime("%Y/%m/%d %H:%M:%S")
+
+
 def time_since(start_time: float, finished_ratio: float):
     def as_minutes(s):
         m = math.floor(s / 60)

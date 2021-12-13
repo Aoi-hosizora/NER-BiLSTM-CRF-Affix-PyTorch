@@ -20,8 +20,11 @@
 python3 train.py \
     --output_mapping ./output/mapping.pkl \
     --output_affix_list ./output/affix_list.json \
-    --model_path ./model \
-    --use_gpu true
+    --use_crf 1 \
+    --add_cap_feature 1 \
+    --add_affix_feature 1 \
+    --use_gpu 1 \
+    --model_path ./model
 ```
 
 ### References

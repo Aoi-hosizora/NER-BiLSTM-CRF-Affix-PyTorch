@@ -22,20 +22,28 @@ def parse_args():
     parser.add_argument('--output_mapping',    type=str, default='./output/mapping.pkl')
     parser.add_argument('--output_affix_list', type=str, default='./output/affix_list.json')
 
-    parser.add_argument('--use_gpu',     type=bool, default=True)
+    parser.add_argument('--use_crf',           type=int, default=1)
+    parser.add_argument('--add_cap_feature',   type=int, default=1)
+    parser.add_argument('--add_affix_feature', type=int, default=1)
+
+    parser.add_argument('--use_gpu',     type=int, default=1)
     parser.add_argument('--model_path',  type=str, default='./model')
     parser.add_argument('--eval_path',   type=str, default='./evaluate/temp')
     parser.add_argument('--eval_script', type=str, default='./evaluate/conlleval.pl')
 
     args = parser.parse_args()
+    args.use_crf = args.use_crf != 0
+    args.add_cap_feature = args.add_cap_feature != 0
+    args.add_affix_feature = args.add_affix_feature != 0
+    args.use_gpu = args.use_gpu != 0
     args.use_gpu = args.use_gpu and torch.cuda.is_available()
     return args
 
 
 def load_datasets(train_path: str, val_path: str, test_path: str, pretrained_glove: str, output_mapping: str, output_affix_list: str):
     train_sentences = dataset.load_sentences(train_path)
-    val_sentences = dataset.load_sentences(val_path)[:1000]
-    test_sentences = dataset.load_sentences(test_path)[:1000]
+    val_sentences = dataset.load_sentences(val_path)[:1000] # <<<
+    test_sentences = dataset.load_sentences(test_path)[:1000] # <<<
 
     dico_words, _, _ = dataset.word_mapping(train_sentences)
     _, char_to_id, _ = dataset.char_mapping(train_sentences)
@@ -62,7 +70,7 @@ def load_datasets(train_path: str, val_path: str, test_path: str, pretrained_glo
 
 def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_data: List[dataset.Data], test_data: List[dataset.Data], model_path: str, **kwargs):
     start_time = time.time()
-    start_time_str = time.strftime("%Y/%m/%d %H:%M:%S")
+    start_time_str = utils.now_str()
 
     lr = 0.015
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
@@ -73,16 +81,14 @@ def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_da
     train_count = 0
     epochs = 5
     batches = len(train_data)
-    log_every = 20
+    log_every = 100
     save_every = batches / 2
-    plot_every = 20
-    eval_every = 200
+    plot_every = 100
+    eval_every = 2000
 
-    print('\nStart training, total {} epochs, {} batches...'.format(epochs, batches))
+    print('\nStart training, totally {} epochs, {} batches...'.format(epochs, batches))
     for epoch in range(0, epochs):
         for batch, index in enumerate(np.random.permutation(batches)):
-            if batch == 1000:
-                break
             model.train()
             train_count += 1
             data = train_data[index]
@@ -109,8 +115,8 @@ def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_da
             if train_count % log_every == 0:
                 avg_loss_log = total_loss_log / log_every
                 total_loss_log = 0
-                print('Epoch: {}/{}, batch: {}/{}, train Loss: {:.4f}, time: {}'.format(
-                    epoch + 1, epochs, batch + 1, batches, avg_loss_log, utils.time_since(start_time, (epoch * batches + batch) / (epochs * batches))))
+                print('{} Epoch: {}/{}, batch: {}/{}, train Loss: {:.4f}, time: {}'.format(
+                    utils.now_str(), epoch + 1, epochs, batch + 1, batches, avg_loss_log, utils.time_since(start_time, (epoch * batches + batch) / (epochs * batches))))
 
             if train_count % plot_every == 0:
                 avg_loss_plot = total_loss_plot / plot_every
@@ -135,7 +141,7 @@ def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_da
     # end epoch
 
     end_time = time.time()
-    end_time_str = time.strftime("%Y/%m/%d %H:%M:%S")
+    end_time_str = utils.now_str()
     print('Start time: {}, end time: {}, totally spent time: {:d}min'.format(start_time_str, end_time_str, (end_time - start_time) / 60))
 
     epochs = [i * plot_every for i in range(1, len(losses_plot) + 1)]
@@ -179,6 +185,7 @@ def evaluate(model: BiLSTM_CRF, device: str, dataset: List[dataset.Data], tag_to
         feats = model(words_in=words_in, chars_mask=chars_mask, chars_length=chars_length, chars_d=chars_d, caps=caps, words_prefixes=words_prefixes, words_suffixes=words_suffixes)
         _, predicted_ids = model.decode_targets(feats)
         for (word, true_id, pred_id) in zip(data.str_words, data.tags, predicted_ids):
+            # print(true_id, pred_id)
             line = ' '.join([word, id_to_tag[true_id], id_to_tag[pred_id]])
             prediction.append(line)
             confusion_matrix[true_id, pred_id] += 1
@@ -218,6 +225,7 @@ def main():
 
     model = BiLSTM_CRF(
         vocab_size=len(word_to_id),
+        tag_to_id=tag_to_id,
         pretrained_embedding=word_embedding,
         word_embedding_dim=100,
         char_count=len(char_to_id),
@@ -228,14 +236,13 @@ def main():
         suffix_counts=[len(suffix_dicts[1]) + 1, len(suffix_dicts[2]) + 1, len(suffix_dicts[3]) + 1],
         prefix_embedding_dims=[16, 16, 16],
         suffix_embedding_dims=[16, 16, 16],
-        tag_to_id=tag_to_id,
         char_lstm_hidden_size=25,
         output_lstm_hidden_size=200,
         dropout_p=0.5,
         device=device,
-        use_crf=True,
-        add_cap_feature=True,
-        add_affix_feature=True,
+        use_crf=args.use_crf,
+        add_cap_feature=args.add_cap_feature,
+        add_affix_feature=args.add_affix_feature,
     )
     model.to(device)
     train(

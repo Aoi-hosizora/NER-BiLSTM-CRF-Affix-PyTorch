@@ -11,3 +11,4 @@ evaluate/temp/*
 model/*
 output/*
 !.gitkeep
+*.log
