@@ -8,6 +8,8 @@ import torch.nn as nn
 from typing import Tuple, List, Dict, TypeVar
 T = TypeVar('T')
 
+# Some code are refered from https://github.com/ZhixiuYe/NER-pytorch.
+
 
 def update_tag_scheme(sentences: List[List[List[str]]], tag_scheme: str):
     """
@@ -77,6 +79,66 @@ def iob_iobes(tags):
         else:
             raise Exception('Invalid IOB format!')
     return new_tags
+
+
+def argmax(vec):
+    _, idx = torch.max(vec, 1)
+    return idx.view(-1).data.tolist()[0]
+
+
+def init_embedding(input_embedding):
+    bias = np.sqrt(3.0 / input_embedding.weight.size(1))
+    nn.init.uniform_(input_embedding.weight, -bias, bias)
+
+
+def init_linear(input_linear):
+    bias = np.sqrt(6.0 / (input_linear.weight.size(0) + input_linear.weight.size(1)))
+    nn.init.uniform_(input_linear.weight, -bias, bias)
+    if input_linear.bias is not None:
+        input_linear.bias.data.zero_()
+
+
+def init_lstm(input_lstm):
+    for ind in range(0, input_lstm.num_layers):
+        weight = eval('input_lstm.weight_ih_l' + str(ind))
+        bias = np.sqrt(6.0 / (weight.size(0) / 4 + weight.size(1)))
+        nn.init.uniform_(weight, -bias, bias)
+        weight = eval('input_lstm.weight_hh_l' + str(ind))
+        bias = np.sqrt(6.0 / (weight.size(0) / 4 + weight.size(1)))
+        nn.init.uniform_(weight, -bias, bias)
+    if input_lstm.bidirectional:
+        for ind in range(0, input_lstm.num_layers):
+            weight = eval('input_lstm.weight_ih_l' + str(ind) + '_reverse')
+            bias = np.sqrt(6.0 / (weight.size(0) / 4 + weight.size(1)))
+            nn.init.uniform_(weight, -bias, bias)
+            weight = eval('input_lstm.weight_hh_l' + str(ind) + '_reverse')
+            bias = np.sqrt(6.0 / (weight.size(0) / 4 + weight.size(1)))
+            nn.init.uniform_(weight, -bias, bias)
+
+    if input_lstm.bias:
+        for ind in range(0, input_lstm.num_layers):
+            weight = eval('input_lstm.bias_ih_l' + str(ind))
+            weight.data.zero_()
+            weight.data[input_lstm.hidden_size: 2 * input_lstm.hidden_size] = 1
+            weight = eval('input_lstm.bias_hh_l' + str(ind))
+            weight.data.zero_()
+            weight.data[input_lstm.hidden_size: 2 * input_lstm.hidden_size] = 1
+        if input_lstm.bidirectional:
+            for ind in range(0, input_lstm.num_layers):
+                weight = eval('input_lstm.bias_ih_l' + str(ind) + '_reverse')
+                weight.data.zero_()
+                weight.data[input_lstm.hidden_size: 2 * input_lstm.hidden_size] = 1
+                weight = eval('input_lstm.bias_hh_l' + str(ind) + '_reverse')
+                weight.data.zero_()
+                weight.data[input_lstm.hidden_size: 2 * input_lstm.hidden_size] = 1
+
+
+def adjust_learning_rate(optimizer, lr):
+    """
+    shrink learning rate for pytorch
+    """
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 
 def create_dico(item_list: List[List[T]]) -> Dict[T, int]:
@@ -194,3 +256,50 @@ def get_words_affix_ids(sentence_words: List[str], prefix_dicts: List[Dict[str, 
         words_prefix_ids.append(prefix_ids)
         words_suffix_ids.append(suffix_ids)
     return words_prefix_ids, words_suffix_ids
+
+
+def align_char_lists(chars: List[List[int]]):
+    chars_sorted = sorted(chars, key=lambda p: len(p), reverse=True)
+    d: Dict[int, int] = {}
+    for i, ci in enumerate(chars):
+        for j, cj in enumerate(chars_sorted):
+            if ci == cj and not j in d and not i in d.values():
+                d[j] = i
+                continue
+    chars_length = [len(c) for c in chars_sorted]
+    chars_mask = np.zeros((len(chars_sorted), max(chars_length)), dtype=int)
+    for i, c in enumerate(chars_sorted):
+        chars_mask[i, :chars_length[i]] = c
+    return chars_mask, chars_length, d
+
+
+def time_since(start_time: float, finished_ratio: float):
+    def as_minutes(s):
+        m = math.floor(s / 60)
+        s -= m * 60
+        return '{:02d}m{:02d}s'.format(int(m), int(s))
+    now_time = time.time()
+    spent_duration = now_time - start_time
+    total_duration = spent_duration / finished_ratio
+    return '{}/{}'.format(as_minutes(spent_duration), as_minutes(total_duration))
+
+
+def evaluate_by_perl_script(prediction: List[str], eval_path: str, eval_script: str) -> Tuple[List[str], float, float, float, float]:
+    pred_path = '{}/pred.val'.format(eval_path)
+    score_path = '{}/score.val'.format(eval_path)
+    with open(pred_path, 'w') as f:
+        f.write('\n'.join(prediction))
+    os.system('%s < %s > %s' % (eval_script, pred_path, score_path))
+
+    eval_lines = [l.rstrip() for l in codecs.open(score_path, 'r', 'utf8')]
+    acc, pre, rec, f1 = -1.0, -1.0, -1.0, -1.0
+    if len(eval_lines) > 0:
+        # accuracy:  91.37%; precision:  59.38%; recall:  62.86%; FB1:  61.07
+        # ['accuracy:  91.37%', ' precision:  59.38%', ' recall:  62.86%', ' FB1:  61.07']
+        sp = eval_lines[1].strip().split(';')
+        acc = float(sp[0].strip().lstrip('accuracy:').lstrip().rstrip('%')) / 100
+        pre = float(sp[1].strip().lstrip('precision:').lstrip().rstrip('%')) / 100
+        rec = float(sp[2].strip().lstrip('recall:').lstrip().rstrip('%')) / 100
+        f1 = float(sp[3].strip().lstrip('FB1:').lstrip()) / 100
+
+    return eval_lines, acc, pre, rec, f1
