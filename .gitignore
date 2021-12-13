@@ -3,3 +3,11 @@
 .ionide/
 .history/
 .idea/
+
+### Project ###
+__pycache__/
+data/*
+evaluate/temp/*
+model/*
+output/*
+!.gitkeep

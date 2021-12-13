@@ -7,8 +7,22 @@
 
 ### Dataset
 
-+ [CoNLL-2003-English](https://www.clips.uantwerpen.be/conll2003/ner/)
-+ (Pretrained word embedding: [glove.6B.100d.txt](http://nlp.stanford.edu/data/glove.6B.zip))
++ NER dataset: [CoNLL-2003-English](https://www.clips.uantwerpen.be/conll2003/ner/), it can be downloaded from [release](...) page.
++ Pretrained word embedding: [glove.6B.100d.txt](https://nlp.stanford.edu/projects/glove/), it can be downloaded from [here](http://nlp.stanford.edu/data/glove.6B.zip).
+
+### Train
+
++ First, download eng.testa, eng.testb, eng.train, glove.6B.100d.txt to `./data/` folder.
++ The evaluate script will ask you to have a perl interpreter, commonly it has been installed on Linux systems.
++ To train, execute the following script. You can edit some parameters in [train.py](./train.py).
+
+```bash
+python3 train.py \
+    --output_mapping ./output/mapping.pkl \
+    --output_affix_list ./output/affix_list.json \
+    --model_path ./model \
+    --use_gpu true
+```
 
 ### References
 
