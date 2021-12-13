@@ -7,7 +7,7 @@
 
 ### Dataset
 
-+ NER dataset: [CoNLL-2003-English](https://www.clips.uantwerpen.be/conll2003/ner/), it can be downloaded from [release](...) page.
++ NER dataset: [CoNLL-2003-English](https://www.clips.uantwerpen.be/conll2003/ner/), it can be downloaded from [release](https://github.com/Aoi-hosizora/NER-BiLSTM-CRF-PyTorch/releases/tag/v0.0.0) page.
 + Pretrained word embedding: [glove.6B.100d.txt](https://nlp.stanford.edu/projects/glove/), it can be downloaded from [here](http://nlp.stanford.edu/data/glove.6B.zip).
 
 ### Train

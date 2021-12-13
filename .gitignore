@@ -12,3 +12,5 @@ model/*
 output/*
 !.gitkeep
 *.log
+*.rar
+*.zip

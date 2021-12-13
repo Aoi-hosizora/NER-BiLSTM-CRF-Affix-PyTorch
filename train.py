@@ -115,7 +115,7 @@ def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_da
             if train_count % log_every == 0:
                 avg_loss_log = total_loss_log / log_every
                 total_loss_log = 0
-                print('{} Epoch: {}/{}, batch: {}/{}, train Loss: {:.4f}, time: {}'.format(
+                print('{} Epoch: {}/{}, batch: {}/{}, train loss: {:.4f}, time: {}'.format(
                     utils.now_str(), epoch + 1, epochs, batch + 1, batches, avg_loss_log, utils.time_since(start_time, (epoch * batches + batch) / (epochs * batches))))
 
             if train_count % plot_every == 0:
@@ -142,7 +142,7 @@ def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_da
 
     end_time = time.time()
     end_time_str = utils.now_str()
-    print('Start time: {}, end time: {}, totally spent time: {:d}min'.format(start_time_str, end_time_str, (end_time - start_time) / 60))
+    print('Start time: {}, end time: {}, totally spent time: {:d}min'.format(start_time_str, end_time_str, int((end_time - start_time) / 60)))
 
     epochs = [i * plot_every for i in range(1, len(losses_plot) + 1)]
     plt.plot(epochs, losses_plot)
