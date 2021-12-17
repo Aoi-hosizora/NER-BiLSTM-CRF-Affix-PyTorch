@@ -1,9 +1,13 @@
-# NER-BiLSTM-CRF-PyTorch
+# NER-BiLSTM-CRF-Affix-PyTorch
 
 + A PyTorch implementation of a common NER model: BiLSTM-CRF with Character-Word-Capital-Affix-Level Feature.
-+ Tips: Some code are refered from [ZhixiuYe/NER-pytorch](https://github.com/ZhixiuYe/NER-pytorch).
++ Tips: Some code are referred from [ZhixiuYe/NER-pytorch](https://github.com/ZhixiuYe/NER-pytorch).
 + Paper: Bidirectional LSTM-CRF Models for Sequence Tagging - [arXiv](https://arxiv.org/abs/1508.01991)
 + Paper: Deep Affix Features Improve Neural Named Entity Recognizers - [ACL](https://aclanthology.org/S18-2021/)
+
+### Architecture
+
+![architecture](./assets/arch.png)
 
 ### Dataset
 
@@ -12,9 +16,9 @@
 
 ### Train
 
-+ First, download eng.testa, eng.testb, eng.train, glove.6B.100d.txt to `./data/` folder.
-+ The evaluate script will ask you to have a perl interpreter, commonly it has been installed on Linux systems.
++ First, download eng.train, eng.testa, eng.testb, glove.6B.100d.txt and save to `./data/` folder.
 + To train, execute the following script. You can edit some parameters in [train.py](./train.py).
+> Tips: The evaluate script will ask you to have a perl interpreter, commonly it has been installed on Linux systems.
 
 ```bash
 python3 train.py \

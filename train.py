@@ -28,6 +28,7 @@ def parse_args():
 
     parser.add_argument('--use_gpu',     type=int, default=1)
     parser.add_argument('--model_path',  type=str, default='./model')
+    parser.add_argument('--graph_path',  type=str, default='./output')
     parser.add_argument('--eval_path',   type=str, default='./evaluate/temp')
     parser.add_argument('--eval_script', type=str, default='./evaluate/conlleval.pl')
 
@@ -41,9 +42,9 @@ def parse_args():
 
 
 def load_datasets(train_path: str, val_path: str, test_path: str, pretrained_glove: str, output_mapping: str, output_affix_list: str):
-    train_sentences = dataset.load_sentences(train_path)
-    val_sentences = dataset.load_sentences(val_path)[:1000] # <<<
-    test_sentences = dataset.load_sentences(test_path)[:1000] # <<<
+    train_sentences = dataset.load_sentences(train_path)[:14000]
+    val_sentences = dataset.load_sentences(val_path)[:1500]  # <<<
+    test_sentences = dataset.load_sentences(test_path)[-1500:]  # <<<
 
     dico_words, _, _ = dataset.word_mapping(train_sentences)
     _, char_to_id, _ = dataset.char_mapping(train_sentences)
@@ -68,23 +69,22 @@ def load_datasets(train_path: str, val_path: str, test_path: str, pretrained_glo
     return (train_data, val_data, test_data), (word_to_id, char_to_id, tag_to_id, id_to_tag), word_embedding, (prefix_dicts, suffix_dicts)
 
 
-def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_data: List[dataset.Data], test_data: List[dataset.Data], model_path: str, **kwargs):
-    start_time = time.time()
-    start_time_str = utils.now_str()
+def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_data: List[dataset.Data], test_data: List[dataset.Data], model_path: str, graph_path: str, **kwargs):
+    start_timestamp = time.time()
 
     lr = 0.015
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     total_loss_log = 0
     total_loss_plot = 0
-    losses_plot, accs_plot, f1s_plot = [], [], []
+    losses_plot, accuracies_plots, f1scores_plots = [], [[], []], [[], []]
 
     train_count = 0
-    epochs = 5
+    epochs = 10
     batches = len(train_data)
     log_every = 100
-    save_every = batches / 2
+    save_every = int(batches / 2)
     plot_every = 100
-    eval_every = 2000
+    eval_every = 700
 
     print('\nStart training, totally {} epochs, {} batches...'.format(epochs, batches))
     for epoch in range(0, epochs):
@@ -116,56 +116,72 @@ def train(model: BiLSTM_CRF, device: str, train_data: List[dataset.Data], val_da
                 avg_loss_log = total_loss_log / log_every
                 total_loss_log = 0
                 print('{} Epoch: {}/{}, batch: {}/{}, train loss: {:.4f}, time: {}'.format(
-                    utils.now_str(), epoch + 1, epochs, batch + 1, batches, avg_loss_log, utils.time_since(start_time, (epoch * batches + batch) / (epochs * batches))))
+                    utils.time_string(), epoch + 1, epochs, batch + 1, batches, avg_loss_log, utils.time_since(start_timestamp, (epoch * batches + batch) / (epochs * batches))))
 
             if train_count % plot_every == 0:
                 avg_loss_plot = total_loss_plot / plot_every
                 total_loss_plot = 0
                 losses_plot.append(avg_loss_plot)
 
-            if (save_every % eval_every == 0) or (batch == batches - 1 and epoch == epochs - 1):
+            if (train_count % save_every == 0) or (batch == batches - 1 and epoch == epochs - 1):
                 torch.save(model, '{}/savepoint_epoch{}_batch{}.pth'.format(model_path, epochs + 1, batches + 1))
 
             if train_count % eval_every == 0:
-                print('\nEvaluating on validating dataset (epoch {}/{}, batch {}/{})...'.format(epoch + 1, epochs, batch + 1, batches))
+                print('\n{} Evaluating on validating dataset (epoch {}/{}, batch {}/{})...'.format(utils.time_string(), epoch + 1, epochs, batch + 1, batches))
                 acc1, _, _, f1_score1 = evaluate(model=model, device=device, dataset=val_data, **kwargs)
-                print('\nEvaluating on testing dataset (epoch {}/{}, batch {}/{})...'.format(epoch + 1, epochs, batch + 1, batches))
+                print('\n{} Evaluating on testing dataset (epoch {}/{}, batch {}/{})...'.format(utils.time_string(), epoch + 1, epochs, batch + 1, batches))
                 acc2, _, _, f1_score2 = evaluate(model=model, device=device, dataset=test_data, **kwargs)
-                accs_plot.append((acc1 + acc2) / 2)
-                f1s_plot.append((f1_score1 + f1_score2) / 2)
+                accuracies_plots[0].append(acc1)
+                accuracies_plots[1].append(acc2)
+                f1scores_plots[0].append(f1_score1)
+                f1scores_plots[1].append(f1_score2)
                 print("\nContinue training...")
         # end batch
 
+        # Referred from https://github.com/ZhixiuYe/NER-pytorch.
         new_lr = lr / (1 + 0.05 * train_count / len(train_data))
         utils.adjust_learning_rate(optimizer, lr=new_lr)
     # end epoch
 
-    end_time = time.time()
-    end_time_str = utils.now_str()
-    print('Start time: {}, end time: {}, totally spent time: {:d}min'.format(start_time_str, end_time_str, int((end_time - start_time) / 60)))
+    end_timestamp = time.time()
+    start_time_str = utils.time_string(start_timestamp)
+    end_time_str = utils.time_string(end_timestamp)
+    print('Start time: {}, end time: {}, totally spent time: {:d}min'.format(start_time_str, end_time_str, int((end_timestamp - start_timestamp) / 60)))
 
-    epochs = [i * plot_every for i in range(1, len(losses_plot) + 1)]
+    with open("{}/plots.log".format(graph_path), 'w') as f:
+        f.write("time: {}\n\n".format(end_time_str))
+        f.write("loss:\n[{}]\n\n".format(', '.join([str(i) for i in losses_plot])))
+        f.write("acc1:\n[{}]\n\n".format(', '.join([str(i) for i in accuracies_plots[0]])))
+        f.write("acc2:\n[{}]\n\n".format(', '.join([str(i) for i in accuracies_plots[1]])))
+        f.write("f1:\n[{}]\n\n".format(', '.join([str(i) for i in f1scores_plots[0]])))
+        f.write("f2:\n[{}]\n\n".format(', '.join([str(i) for i in f1scores_plots[1]])))
+
+    epochs = list(range(1, len(losses_plot) + 1))
     plt.plot(epochs, losses_plot)
     plt.legend(['Training'])
-    plt.xlabel('Epoch')
+    plt.xlabel('Index')
     plt.ylabel('Loss')
-    plt.savefig('{}/loss.pdf'.format(model_path))
+    plt.savefig('{}/loss.pdf'.format(graph_path))
 
     plt.clf()
-    epochs = [i * eval_every for i in range(1, len(accs_plot) + 1)]
-    plt.plot(epochs, accs_plot)
-    plt.legend(['Validating'])
-    plt.xlabel('Epoch')
+    epochs = list(range(1, len(accuracies_plots[0]) + 1))
+    plt.plot(epochs, accuracies_plots[0], 'b')
+    plt.plot(epochs, accuracies_plots[1], 'r')
+    plt.legend(['eng.testa', 'eng.testb'])
+    plt.xlabel('Index')
     plt.ylabel('Accuracy')
-    plt.savefig('{}/acc.pdf'.format(model_path))
+    plt.savefig('{}/acc.pdf'.format(graph_path))
 
     plt.clf()
-    epochs = [i * eval_every for i in range(1, len(f1s_plot) + 1)]
-    plt.plot(epochs, f1s_plot)
-    plt.legend(['Validating'])
-    plt.xlabel('Epoch')
+    epochs = list(range(1, len(f1scores_plots[0]) + 1))
+    plt.plot(epochs, f1scores_plots[0], 'b')
+    plt.plot(epochs, f1scores_plots[1], 'r')
+    plt.legend(['eng.testa', 'eng.testb'])
+    plt.xlabel('Index')
     plt.ylabel('F1-score')
-    plt.savefig('{}/f1-score.pdf'.format(model_path))
+    plt.savefig('{}/f1-score.pdf'.format(graph_path))
+
+    print("graphs have been saved to {}".format(graph_path))
 
 
 def evaluate(model: BiLSTM_CRF, device: str, dataset: List[dataset.Data], tag_to_id: Dict[str, int], id_to_tag: Dict[int, str], eval_path: str, eval_script: str) -> Tuple[float, float, float, float]:
@@ -185,7 +201,6 @@ def evaluate(model: BiLSTM_CRF, device: str, dataset: List[dataset.Data], tag_to
         feats = model(words_in=words_in, chars_mask=chars_mask, chars_length=chars_length, chars_d=chars_d, caps=caps, words_prefixes=words_prefixes, words_suffixes=words_suffixes)
         _, predicted_ids = model.decode_targets(feats)
         for (word, true_id, pred_id) in zip(data.str_words, data.tags, predicted_ids):
-            # print(true_id, pred_id)
             line = ' '.join([word, id_to_tag[true_id], id_to_tag[pred_id]])
             prediction.append(line)
             confusion_matrix[true_id, pred_id] += 1
@@ -252,6 +267,7 @@ def main():
         val_data=val_data,
         test_data=test_data,
         model_path=args.model_path,
+        graph_path=args.graph_path,
         **{
             'tag_to_id': tag_to_id,
             'id_to_tag': id_to_tag,

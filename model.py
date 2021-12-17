@@ -255,5 +255,5 @@ class BiLSTM_CRF(nn.Module):
             score, tag_seq = self._viterbi_decode(feats)
         else:
             score, tag_seq = torch.max(feats, 1)
-            tag_seq = list(tag_seq.cpu().data)
+            tag_seq = [i.item() for i in list(tag_seq.cpu().data)]
         return score, tag_seq

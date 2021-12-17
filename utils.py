@@ -1,4 +1,5 @@
 import codecs
+from datetime import datetime
 import math
 import numpy as np
 import os
@@ -8,7 +9,7 @@ import torch.nn as nn
 from typing import Tuple, List, Dict, TypeVar
 T = TypeVar('T')
 
-# Some code are refered from https://github.com/ZhixiuYe/NER-pytorch.
+# Some code are referred from https://github.com/ZhixiuYe/NER-pytorch.
 
 
 def update_tag_scheme(sentences: List[List[List[str]]], tag_scheme: str):
@@ -273,17 +274,19 @@ def align_char_lists(chars: List[List[int]]):
     return chars_mask, chars_length, d
 
 
-def now_str():
-    return time.strftime("%Y/%m/%d %H:%M:%S")
+def time_string(timestamp: float = 0) -> str:
+    if timestamp == 0:
+        timestamp = time.time()
+    return datetime.fromtimestamp(timestamp).strftime("%Y/%m/%d %H:%M:%S")
 
 
-def time_since(start_time: float, finished_ratio: float):
+def time_since(start_timestamp: float, finished_ratio: float) -> str:
     def as_minutes(s):
         m = math.floor(s / 60)
         s -= m * 60
         return '{:02d}m{:02d}s'.format(int(m), int(s))
     now_time = time.time()
-    spent_duration = now_time - start_time
+    spent_duration = now_time - start_timestamp
     total_duration = spent_duration / finished_ratio
     return '{}/{}'.format(as_minutes(spent_duration), as_minutes(total_duration))
 
